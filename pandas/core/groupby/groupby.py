@@ -828,6 +828,10 @@ b  2""",
 
         func = self._is_builtin_func(func)
 
+        cyfunc = self._get_cython_func(func)
+        if cyfunc and not args and not kwargs:
+            return getattr(self, cyfunc)()
+
         # this is needed so we don't try and wrap strings. If we could
         # resolve functions to their callable functions prior, this
         # wouldn't be needed
@@ -1531,9 +1535,16 @@ class GroupBy(_GroupBy[FrameOrSeries]):
 
     @doc(_groupby_agg_method_template, fname="sum", no=True, mc=0)
     def sum(self, numeric_only: bool = True, min_count: int = 0):
-        return self._agg_general(
+        result = self._agg_general(
             numeric_only=numeric_only, min_count=min_count, alias="add", npfunc=np.sum
         )
+        result = result.reindex(self.grouper.result_index)
+        from pandas.core.dtypes.cast import maybe_downcast_to_dtype
+        if len(result.shape) == 1:
+            result = maybe_downcast_to_dtype(result, 'infer')
+        else:
+            result = result.apply(maybe_downcast_to_dtype, axis=0, dtype='infer')
+        return self._reindex_output(result, 0)
 
     @doc(_groupby_agg_method_template, fname="prod", no=True, mc=0)
     def prod(self, numeric_only: bool = True, min_count: int = 0):
